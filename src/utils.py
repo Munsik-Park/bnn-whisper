@@ -1,7 +1,10 @@
 import os
 import torch
 import logging
+import psutil
+import gc
 from typing import Optional, List
+from memory_profiler import profile
 
 logger = logging.getLogger(__name__)
 
@@ -37,3 +40,24 @@ def validate_audio_file(file_path: str) -> bool:
         return False
     
     return True
+
+def get_memory_usage():
+    """현재 프로세스의 메모리 사용량을 반환"""
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    return {
+        'rss': memory_info.rss / 1024 / 1024,  # MB
+        'vms': memory_info.vms / 1024 / 1024,  # MB
+    }
+
+def log_memory_usage(label: str = "Current"):
+    """메모리 사용량을 로깅"""
+    memory = get_memory_usage()
+    logger.info(f"{label} Memory Usage - RSS: {memory['rss']:.2f} MB, VMS: {memory['vms']:.2f} MB")
+
+def clear_memory():
+    """메모리 정리"""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    logger.info("Memory cleared")
