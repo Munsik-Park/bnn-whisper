@@ -9,7 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.bnn_whisper import BNNWhisper
 from src.audio_recorder import AudioRecorder
-from src.utils import setup_logging, log_memory_usage, clear_memory
+from src.utils import setup_logging, log_memory_usage, clear_memory, get_memory_usage
 
 def test_korean_speech_recognition():
     """한국어 음성 인식 테스트"""
@@ -17,19 +17,23 @@ def test_korean_speech_recognition():
     setup_logging()
     logger = logging.getLogger(__name__)
     
-    # 초기 메모리 사용량 측정
-    log_memory_usage("Initial")
-    
-    # 모델 초기화
-    logger.info("Initializing model...")
-    model = BNNWhisper(
+    # CPU 모델 초기화
+    logger.info("\n=== Testing with CPU ===")
+    cpu_model = BNNWhisper(
         model_name="openai/whisper-base",
+        device="cpu",
         num_samples=10,
         default_language="ko"
     )
     
-    # 모델 로드 후 메모리 사용량 측정
-    log_memory_usage("After model load")
+    # MPS 모델 초기화
+    logger.info("\n=== Testing with MPS ===")
+    mps_model = BNNWhisper(
+        model_name="openai/whisper-base",
+        device="mps",
+        num_samples=10,
+        default_language="ko"
+    )
     
     # 오디오 녹음기 초기화
     recorder = AudioRecorder()
@@ -47,27 +51,42 @@ def test_korean_speech_recognition():
             audio_file = recorder.stop_recording()
             
             try:
-                # 인식 전 메모리 사용량 측정
-                log_memory_usage("Before transcription")
-                
-                # 음성 인식 수행
-                result, uncertainty = model.transcribe_with_uncertainty(
+                # CPU로 테스트
+                logger.info("\n=== CPU Test ===")
+                cpu_result, cpu_uncertainty, cpu_metrics = cpu_model.transcribe_with_uncertainty(
                     audio_file,
                     language="ko",
                     task="transcribe"
                 )
                 
-                # 인식 후 메모리 사용량 측정
-                log_memory_usage("After transcription")
+                # MPS로 테스트
+                logger.info("\n=== MPS Test ===")
+                mps_result, mps_uncertainty, mps_metrics = mps_model.transcribe_with_uncertainty(
+                    audio_file,
+                    language="ko",
+                    task="transcribe"
+                )
                 
-                print("\n=== 인식 결과 ===")
-                print(f"텍스트: {result}")
-                print(f"불확실성: {uncertainty:.2f}")
-                print("===============")
+                # 결과 출력
+                print("\n=== 성능 비교 결과 ===")
+                print(f"CPU 결과: {cpu_result}")
+                print(f"CPU 불확실성: {cpu_uncertainty:.2f}")
+                print(f"CPU 총 소요시간: {cpu_metrics.total_time:.2f}초")
+                print(f"CPU 전처리 시간: {cpu_metrics.preprocessing_time:.2f}초")
+                print(f"CPU 추론 시간: {cpu_metrics.inference_time:.2f}초")
+                print(f"CPU 메모리 사용량: {cpu_metrics.memory_usage['rss']:.2f} MB")
                 
-                # 메모리 정리
-                clear_memory()
-                log_memory_usage("After cleanup")
+                print(f"\nMPS 결과: {mps_result}")
+                print(f"MPS 불확실성: {mps_uncertainty:.2f}")
+                print(f"MPS 총 소요시간: {mps_metrics.total_time:.2f}초")
+                print(f"MPS 전처리 시간: {mps_metrics.preprocessing_time:.2f}초")
+                print(f"MPS 추론 시간: {mps_metrics.inference_time:.2f}초")
+                print(f"MPS 메모리 사용량: {mps_metrics.memory_usage['rss']:.2f} MB")
+                
+                # 성능 향상률 계산
+                speedup = cpu_metrics.total_time / mps_metrics.total_time
+                print(f"\nMPS 성능 향상률: {speedup:.2f}x")
+                print("=====================")
                 
             finally:
                 # 임시 파일 정리
@@ -79,8 +98,7 @@ def test_korean_speech_recognition():
         logger.error(f"오류 발생: {e}")
         raise
     finally:
-        # 최종 메모리 사용량 측정
-        log_memory_usage("Final")
+        # 메모리 정리
         clear_memory()
 
 if __name__ == "__main__":
