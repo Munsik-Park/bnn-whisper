@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+data/audio/*
+!data/audio/.gitkeep
+*.wav
+*.mp3
+*.flac
+
+# Logs
+*.log
+
+# Git
+.gitignore data/audio/*
